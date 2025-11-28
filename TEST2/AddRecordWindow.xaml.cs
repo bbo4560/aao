@@ -5,7 +5,7 @@ namespace TEST2
 {
     public partial class AddRecordWindow : Window
     {
-        public OperationRecord NewRecord { get; private set; }
+        public OperationRecord? NewRecord { get; private set; }
 
         public AddRecordWindow()
         {

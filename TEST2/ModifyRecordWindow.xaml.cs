@@ -5,7 +5,7 @@ namespace TEST2
 {
     public partial class ModifyRecordWindow : Window
     {
-        public OperationRecord ModifiedRecord { get; private set; }
+        public OperationRecord? ModifiedRecord { get; private set; }
         private int _originalId;
 
         public ModifyRecordWindow(OperationRecord record)

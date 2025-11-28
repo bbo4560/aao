@@ -7,19 +7,20 @@ using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-
+using System.Configuration;
 
 namespace TEST2
 {
     public partial class MainWindow : Window
     {
-        private const string ConnectionString = "Host=192.168.43.93;Username=postgres;Password=1234;Database=testdb";
         private readonly DatabaseService _dbService;
         private ObservableCollection<OperationRecord> _records = new ObservableCollection<OperationRecord>();
-
+        private readonly string ConnectionString = ConfigurationManager.ConnectionStrings["MyDbConnection"].ConnectionString;
         public MainWindow()
         {
             InitializeComponent();
+            string machineName = Environment.MachineName;
+            this.Title = Environment.MachineName;
             _dbService = new DatabaseService(ConnectionString);
             dataGrid.ItemsSource = _records;
             Loaded += MainWindow_Loaded;
@@ -69,23 +70,26 @@ namespace TEST2
         }
 
         private async void BtnAdd_Click(object sender, RoutedEventArgs e)
-      
+
         {
             var addWindow = new AddRecordWindow();
             addWindow.Owner = this;
-            
+
             if (addWindow.ShowDialog() == true)
             {
                 var newRecord = addWindow.NewRecord;
-                try
+                if (newRecord != null)
                 {
-                    await _dbService.InsertAsync(newRecord);
-                    await LoadDataAsync();
-                    UpdateLastOpTime();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error adding record: {ex.Message}");
+                    try
+                    {
+                        await _dbService.InsertAsync(newRecord);
+                        await LoadDataAsync();
+                        UpdateLastOpTime();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error adding record: {ex.Message}");
+                    }
                 }
             }
         }
@@ -106,7 +110,7 @@ namespace TEST2
                         queryWindow.QueryDate,
                         queryWindow.QueryTime
                     );
-                    
+
                     _records.Clear();
                     foreach (var item in data)
                     {
@@ -184,19 +188,22 @@ namespace TEST2
                 return;
             }
 
-            if (MessageBox.Show($"確定要刪除選取的 {selectedRecords.Count} 筆資料嗎?", "確認", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            if (MessageBox.Show($"確定要刪除選取的 {selectedRecords.Count} 筆資料嗎?", "確認", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
-                try
+                if (ShowPasswordConfirmDialog())
                 {
-                    var ids = selectedRecords.Select(r => r.Id);
-                    await _dbService.DeleteBatchAsync(ids);
-                    await LoadDataAsync();
-                    UpdateLastOpTime();
-                    MessageBox.Show("批量刪除成功!", "Success");
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"批量刪除失敗: {ex.Message}", "Error");
+                    try
+                    {
+                        var ids = selectedRecords.Select(r => r.Id);
+                        await _dbService.DeleteBatchAsync(ids);
+                        await LoadDataAsync();
+                        UpdateLastOpTime();
+                        MessageBox.Show("批量刪除成功!", "Success");
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"批量刪除失敗: {ex.Message}", "Error");
+                    }
                 }
             }
         }
@@ -205,17 +212,20 @@ namespace TEST2
         {
             if (sender is Button btn && btn.DataContext is OperationRecord record)
             {
-                if (MessageBox.Show($"確定要刪除 PanelID: {record.PanelID} 嗎?", "確認", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                if (MessageBox.Show($"確定要刪除 PanelID: {record.PanelID} 嗎?", "確認", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 {
-                    try
+                    if (ShowPasswordConfirmDialog())
                     {
-                        await _dbService.DeleteAsync(record.Id);
-                        await LoadDataAsync();
-                        UpdateLastOpTime();
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"刪除失敗: {ex.Message}", "Error");
+                        try
+                        {
+                            await _dbService.DeleteAsync(record.Id);
+                            await LoadDataAsync();
+                            UpdateLastOpTime();
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"刪除失敗: {ex.Message}", "Error");
+                        }
                     }
                 }
             }
@@ -231,18 +241,76 @@ namespace TEST2
                 if (modifyWindow.ShowDialog() == true)
                 {
                     var updatedRecord = modifyWindow.ModifiedRecord;
-                    try
+
+                    if (updatedRecord != null)
                     {
-                        await _dbService.UpdateAsync(updatedRecord);
-                        await LoadDataAsync();
-                        UpdateLastOpTime();
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"修改失敗: {ex.Message}", "Error");
+                        try
+                        {
+                            await _dbService.UpdateAsync(updatedRecord);
+                            await LoadDataAsync();
+                            UpdateLastOpTime();
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"修改失敗: {ex.Message}", "Error");
+                        }
                     }
                 }
             }
         }
+
+        private bool ShowPasswordConfirmDialog()
+        {
+            var dialog = new Window
+            {
+                Title = "雙重驗證",
+                Width = 300,
+                Height = 180,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.NoResize,
+                Owner = this
+            };
+
+            var stackPanel = new StackPanel { Margin = new Thickness(20) };
+
+            stackPanel.Children.Add(new TextBlock { Text = "請輸入密碼:", Margin = new Thickness(0, 0, 0, 10) });
+
+            var passwordBox = new PasswordBox { Margin = new Thickness(0, 0, 0, 20) };
+            stackPanel.Children.Add(passwordBox);
+
+            var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+
+            var btnOk = new Button { Content = "確認刪除", Width = 80, Height = 30, Margin = new Thickness(0, 0, 10, 0), IsDefault = true };
+            var btnCancel = new Button { Content = "取消", Width = 80, Height = 30, IsCancel = true };
+
+            bool result = false;
+
+            btnOk.Click += (s, e) =>
+            {
+                if (passwordBox.Password == "1234")
+                {
+                    result = true;
+                    dialog.Close();
+                }
+                else
+                {
+                    MessageBox.Show("密碼錯誤！", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                    passwordBox.Clear();
+                    passwordBox.Focus();
+                }
+            };
+
+            btnCancel.Click += (s, e) => dialog.Close();
+
+            btnPanel.Children.Add(btnOk);
+            btnPanel.Children.Add(btnCancel);
+            stackPanel.Children.Add(btnPanel);
+
+            dialog.Content = stackPanel;
+            dialog.ShowDialog();
+
+            return result;
+        }
+
     }
 }

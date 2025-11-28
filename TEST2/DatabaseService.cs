@@ -51,6 +51,13 @@ namespace TEST2
             return await connection.QueryAsync<OperationRecord>(sql);
         }
 
+        public async Task<DateTime?> GetLastOperationTimeAsync()
+        {
+            using var connection = CreateConnection();
+            string sql = "SELECT MAX(Time) FROM operation_records";
+            return await connection.ExecuteScalarAsync<DateTime?>(sql);
+        }
+
         public async Task<IEnumerable<OperationRecord>> GetFilteredAsync(
             string? panelId, string? lotId, string? carrierId, 
             DateTime? date, TimeSpan? time)

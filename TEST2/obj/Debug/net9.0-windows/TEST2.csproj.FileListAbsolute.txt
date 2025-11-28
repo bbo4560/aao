@@ -45,3 +45,9 @@ C:\Users\bbo05\source\repos\TEST2\TEST2\obj\Debug\net9.0-windows\App.baml
 C:\Users\bbo05\source\repos\TEST2\TEST2\obj\Debug\net9.0-windows\LogWindow.baml
 C:\Users\bbo05\source\repos\TEST2\TEST2\obj\Debug\net9.0-windows\LogWindow.g.cs
 C:\Users\bbo05\source\repos\TEST2\TEST2\obj\Debug\net9.0-windows\TEST2.sourcelink.json
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\TEST2.dll.config
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\System.Configuration.ConfigurationManager.dll
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\System.Diagnostics.EventLog.dll
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\System.Security.Cryptography.ProtectedData.dll
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\runtimes\win\lib\net9.0\System.Diagnostics.EventLog.Messages.dll
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\runtimes\win\lib\net9.0\System.Diagnostics.EventLog.dll
