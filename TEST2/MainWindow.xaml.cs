@@ -8,11 +8,12 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 
+
 namespace TEST2
 {
     public partial class MainWindow : Window
     {
-        private const string ConnectionString = "Host=localhost;Username=postgres;Password=1234;Database=testdb";
+        private const string ConnectionString = "Host=192.168.43.93;Username=postgres;Password=1234;Database=testdb";
         private readonly DatabaseService _dbService;
         private ObservableCollection<OperationRecord> _records = new ObservableCollection<OperationRecord>();
 

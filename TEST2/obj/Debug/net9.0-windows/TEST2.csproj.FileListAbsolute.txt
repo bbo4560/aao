@@ -44,3 +44,4 @@ C:\Users\bbo05\source\repos\TEST2\TEST2\obj\Debug\net9.0-windows\QueryWindow.g.c
 C:\Users\bbo05\source\repos\TEST2\TEST2\obj\Debug\net9.0-windows\App.baml
 C:\Users\bbo05\source\repos\TEST2\TEST2\obj\Debug\net9.0-windows\LogWindow.baml
 C:\Users\bbo05\source\repos\TEST2\TEST2\obj\Debug\net9.0-windows\LogWindow.g.cs
+C:\Users\bbo05\source\repos\TEST2\TEST2\obj\Debug\net9.0-windows\TEST2.sourcelink.json
