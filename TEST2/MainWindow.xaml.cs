@@ -2,12 +2,13 @@
 using OfficeOpenXml;
 using System;
 using System.Collections.ObjectModel;
+using System.Configuration;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Configuration;
+using System.Windows.Input;
 
 namespace TEST2
 {
@@ -148,7 +149,7 @@ namespace TEST2
             }
         }
 
-        private void BtnExport_Click(object sender, RoutedEventArgs e)
+        private async void BtnExport_Click(object sender, RoutedEventArgs e)
         {
             var saveFileDialog = new SaveFileDialog
             {
@@ -160,16 +161,25 @@ namespace TEST2
             {
                 try
                 {
-                    _dbService.ExportToExcel(_records, saveFileDialog.FileName);
-                    MessageBox.Show("匯出成功!", "Success");
-                    UpdateLastOpTime();
+                    BtnExport.IsEnabled = false;
+                    Cursor = Cursors.Wait; 
+                    await _dbService.ExportToExcelAsync(_records, saveFileDialog.FileName);
+
+                    MessageBox.Show("匯出成功!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    UpdateLastOpTime(); 
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"匯出失敗: {ex.Message}", "Error");
+                    MessageBox.Show($"匯出失敗: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                finally
+                {
+                    BtnExport.IsEnabled = true;
+                    Cursor = Cursors.Arrow;
                 }
             }
         }
+
 
         private void BtnLog_Click(object sender, RoutedEventArgs e)
         {

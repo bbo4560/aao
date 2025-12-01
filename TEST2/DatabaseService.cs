@@ -28,14 +28,14 @@ namespace TEST2
         {
             var builder = new NpgsqlConnectionStringBuilder(connectionString);
             var originalDb = builder.Database;
-            
-            builder.Database = "postgres"; 
-            
+
+            builder.Database = "postgres";
+
             using var connection = new NpgsqlConnection(builder.ToString());
             connection.Open();
 
             var exists = connection.ExecuteScalar<bool>(
-                "SELECT 1 FROM pg_database WHERE datname = @name", 
+                "SELECT 1 FROM pg_database WHERE datname = @name",
                 new { name = originalDb });
 
             if (!exists)
@@ -44,302 +44,10 @@ namespace TEST2
             }
         }
 
-        public async Task<IEnumerable<OperationRecord>> GetAllAsync()
-        {
-            using var connection = CreateConnection();
-            string sql = "SELECT * FROM operation_records ORDER BY PanelID ASC, LOTID ASC, CarrierID ASC, Time ASC";
-            return await connection.QueryAsync<OperationRecord>(sql);
-        }
-
-        public async Task<DateTime?> GetLastOperationTimeAsync()
-        {
-            using var connection = CreateConnection();
-            string sql = "SELECT MAX(Time) FROM operation_records";
-            return await connection.ExecuteScalarAsync<DateTime?>(sql);
-        }
-
-        public async Task<IEnumerable<OperationRecord>> GetFilteredAsync(
-            string? panelId, string? lotId, string? carrierId, 
-            DateTime? date, TimeSpan? time)
-        {
-            using var connection = CreateConnection();
-            
-            var sql = "SELECT * FROM operation_records WHERE 1=1";
-
-            long? pId = null;
-            long? lId = null;
-            long? cId = null;
-
-            if (!string.IsNullOrWhiteSpace(panelId) && long.TryParse(panelId, out long p))
-            {
-                pId = p;
-                sql += " AND PanelID = @PanelID";
-            }
-
-            if (!string.IsNullOrWhiteSpace(lotId) && long.TryParse(lotId, out long l))
-            {
-                lId = l;
-                sql += " AND LOTID = @LOTID";
-            }
-
-            if (!string.IsNullOrWhiteSpace(carrierId) && long.TryParse(carrierId, out long c))
-            {
-                cId = c;
-                sql += " AND CarrierID = @CarrierID";
-            }
-
-            if (date.HasValue)
-            {
-                if (time.HasValue)
-                {
-                    sql += " AND Time = @ExactTime";
-                }
-                else
-                {
-                    sql += " AND Time >= @StartOfDay AND Time <= @EndOfDay";
-                }
-            }
-
-            sql += " ORDER BY PanelID ASC, LOTID ASC, CarrierID ASC, Time ASC";
-
-            var exactTime = date.HasValue && time.HasValue ? date.Value + time.Value : (DateTime?)null;
-            var startOfDay = date.HasValue ? date.Value : (DateTime?)null;
-            var endOfDay = date.HasValue ? date.Value.AddDays(1).AddTicks(-1) : (DateTime?)null;
-
-            return await connection.QueryAsync<OperationRecord>(sql, new { 
-                PanelID = pId,
-                LOTID = lId,
-                CarrierID = cId,
-                ExactTime = exactTime,
-                StartOfDay = startOfDay,
-                EndOfDay = endOfDay
-            });
-        }
-
-        public async Task InsertAsync(OperationRecord record)
-        {
-            using var connection = CreateConnection();
-            string sql = @"INSERT INTO operation_records (Time, PanelID, LOTID, CarrierID) 
-                           VALUES (@Time, @PanelID, @LOTID, @CarrierID)";
-            await connection.ExecuteAsync(sql, record);
-            
-            await InsertLogAsync(new SystemLog
-            {
-                OperationTime = DateTime.Now,
-                MachineName = Environment.MachineName,
-                OperationType = "新增",
-                AffectedData = $"Panel ID : {record.PanelID}",
-                DetailDescription = $"LOTID: {record.LOTID}, CarrierID: {record.CarrierID}, Time: {record.Time}"
-            });
-        }
-
-        public async Task UpdateAsync(OperationRecord record)
-        {
-            using var connection = CreateConnection();
-            string sql = @"UPDATE operation_records 
-                           SET Time = @Time, PanelID = @PanelID, LOTID = @LOTID, CarrierID = @CarrierID 
-                           WHERE Id = @Id"; 
-            await connection.ExecuteAsync(sql, record);
-
-            await InsertLogAsync(new SystemLog
-            {
-                OperationTime = DateTime.Now,
-                MachineName = Environment.MachineName,
-                OperationType = "修改",
-                AffectedData = $"Panel ID : {record.PanelID}",
-                DetailDescription = $"New Values - LOTID: {record.LOTID}, CarrierID: {record.CarrierID}, Time: {record.Time}"
-            });
-        }
-
-        public async Task DeleteAsync(int id)
-        {
-            using var connection = CreateConnection();
-            
-            string selectSql = "SELECT * FROM operation_records WHERE Id = @id";
-            var record = await connection.QueryFirstOrDefaultAsync<OperationRecord>(selectSql, new { id });
-            
-            string sql = "DELETE FROM operation_records WHERE Id = @id";
-            await connection.ExecuteAsync(sql, new { id });
-
-            if (record != null)
-            {
-                await InsertLogAsync(new SystemLog
-                {
-                    OperationTime = DateTime.Now,
-                    MachineName = Environment.MachineName,
-                    OperationType = "刪除",
-                    AffectedData = $"Panel ID : {record.PanelID}",
-                    DetailDescription = "Record deleted"
-                });
-            }
-        }
-
-        public async Task DeleteBatchAsync(IEnumerable<int> ids)
-        {
-            var idList = ids.ToList();
-            if (!idList.Any()) return;
-
-            using var connection = CreateConnection();
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
-
-            try 
-            {
-                string deleteSql = "DELETE FROM operation_records WHERE Id = ANY(@Ids)";
-                int count = await connection.ExecuteAsync(deleteSql, new { Ids = idList }, transaction);
-
-                transaction.Commit();
-
-                await InsertLogAsync(new SystemLog
-                {
-                    OperationTime = DateTime.Now,
-                    MachineName = Environment.MachineName,
-                    OperationType = "批量刪除",
-                    AffectedData = $"Batch Delete ({count} records)",
-                    DetailDescription = $"Deleted IDs count: {count}"
-                });
-            }
-            catch
-            {
-                transaction.Rollback();
-                throw;
-            }
-        }
-
-        public async Task<IEnumerable<SystemLog>> GetLogsAsync()
-        {
-            using var connection = CreateConnection();
-            string sql = "SELECT * FROM system_logs ORDER BY OperationTime DESC";
-            return await connection.QueryAsync<SystemLog>(sql);
-        }
-
-        private async Task InsertLogAsync(SystemLog log)
-        {
-            using var connection = CreateConnection();
-            string sql = @"INSERT INTO system_logs (OperationTime, MachineName, OperationType, AffectedData, DetailDescription) 
-                           VALUES (@OperationTime, @MachineName, @OperationType, @AffectedData, @DetailDescription)";
-            await connection.ExecuteAsync(sql, log);
-        }
-
-        public void ExportToExcel(IEnumerable<OperationRecord> data, string filePath)
-        {
-            ExcelPackage.License.SetNonCommercialPersonal("DemoUser");
-
-            using var package = new ExcelPackage();
-            var worksheet = package.Workbook.Worksheets.Add("Operations");
-
-            worksheet.Cells[1, 1].Value = "Time";
-            worksheet.Cells[1, 2].Value = "PanelID";
-            worksheet.Cells[1, 3].Value = "LOTID";
-            worksheet.Cells[1, 4].Value = "CarrierID";
-
-            int row = 2;
-            foreach (var item in data)
-            {
-                worksheet.Cells[row, 1].Value = item.Time.ToString("yyyy/MM/dd HH:mm:ss");
-                worksheet.Cells[row, 2].Value = item.PanelID;
-                worksheet.Cells[row, 3].Value = item.LOTID;
-                worksheet.Cells[row, 4].Value = item.CarrierID;
-                row++;
-            }
-
-            worksheet.Cells.AutoFitColumns();
-            File.WriteAllBytes(filePath, package.GetAsByteArray());
-
-            Task.Run(async () => await InsertLogAsync(new SystemLog
-            {
-                OperationTime = DateTime.Now,
-                MachineName = Environment.MachineName,
-                OperationType = "匯出",
-                AffectedData = "N/A",
-                DetailDescription = $"Exported to {Path.GetFileName(filePath)}"
-            }));
-        }
-
-        public async Task<string> ImportFromExcelAsync(string filePath)
-        {
-            ExcelPackage.License.SetNonCommercialPersonal("DemoUser");
-
-            using var package = new ExcelPackage(new FileInfo(filePath));
-            var worksheet = package.Workbook.Worksheets[0]; 
-            int rowCount = worksheet.Dimension.Rows;
-
-            using var connection = CreateConnection();
-            string fetchSql = "SELECT Time, PanelID, LOTID, CarrierID FROM operation_records";
-            var existingData = await connection.QueryAsync<OperationRecord>(fetchSql);
-            
-            var existingSet = new HashSet<string>(existingData.Select(r => 
-                $"{r.Time:yyyyMMddHHmmss}|{r.PanelID}|{r.LOTID}|{r.CarrierID}"));
-
-            var newRecords = new List<OperationRecord>();
-            
-            int added = 0;
-            int updated = 0;
-            int deleted = 0;
-            int duplicates = 0;
-            int skipped = 0;
-
-            for (int row = 2; row <= rowCount; row++)
-            {
-                var timeStr = worksheet.Cells[row, 1].Text;
-                bool isTimeValid = DateTime.TryParse(timeStr, out DateTime time);
-                bool isPanelIdValid = long.TryParse(worksheet.Cells[row, 2].Text, out long panelId);
-                bool isLotIdValid = long.TryParse(worksheet.Cells[row, 3].Text, out long lotId);
-                bool isCarrierIdValid = long.TryParse(worksheet.Cells[row, 4].Text, out long carrierId);
-
-                if (isTimeValid && isPanelIdValid && isLotIdValid && isCarrierIdValid)
-                {
-                    string key = $"{time:yyyyMMddHHmmss}|{panelId}|{lotId}|{carrierId}";
-
-                    if (existingSet.Contains(key))
-                    {
-                        duplicates++;
-                        skipped++;
-                    }
-                    else
-                    {
-                        added++;
-                        existingSet.Add(key); 
-                        newRecords.Add(new OperationRecord
-                        {
-                            Time = time,
-                            PanelID = panelId,
-                            LOTID = lotId,
-                            CarrierID = carrierId
-                        });
-                    }
-                }
-                else
-                {
-                    skipped++;
-                }
-            }
-
-            if (newRecords.Any())
-            {
-                string insertSql = @"INSERT INTO operation_records (Time, PanelID, LOTID, CarrierID) 
-                                     VALUES (@Time, @PanelID, @LOTID, @CarrierID)";
-                await connection.ExecuteAsync(insertSql, newRecords);
-            }
-
-            string resultSummary = $"新增={added}, 更新={updated}, 刪除={deleted}, 重複={duplicates}, 略過={skipped}";
-
-            await InsertLogAsync(new SystemLog
-            {
-                OperationTime = DateTime.Now,
-                MachineName = Environment.MachineName,
-                OperationType = "匯入",
-                AffectedData = "N/A",
-                DetailDescription = $"Imported from {Path.GetFileName(filePath)}. Result: {resultSummary}"
-            });
-
-            return resultSummary;
-        }
-
         public async Task InitializeDatabaseAsync()
         {
             using var connection = CreateConnection();
-            
+
             string createSql = @"
                 CREATE TABLE IF NOT EXISTS operation_records (
                     Id SERIAL PRIMARY KEY,
@@ -358,8 +66,7 @@ namespace TEST2
                     DetailDescription TEXT
                 );";
             await connection.ExecuteAsync(createSql);
-
-            try 
+            try
             {
                 var checkSql = "SELECT data_type FROM information_schema.columns WHERE table_name = 'operation_records' AND column_name = 'panelid'";
                 var dataType = await connection.QueryFirstOrDefaultAsync<string>(checkSql);
@@ -374,9 +81,352 @@ namespace TEST2
                     await connection.ExecuteAsync(alterSql);
                 }
             }
-            catch 
+            catch
             {
             }
         }
+
+        public async Task<IEnumerable<OperationRecord>> GetAllAsync()
+        {
+            using var connection = CreateConnection();
+            string sql = "SELECT * FROM operation_records ORDER BY PanelID ASC, LOTID ASC, CarrierID ASC, Time ASC";
+            return await connection.QueryAsync<OperationRecord>(sql);
+        }
+
+        public async Task<IEnumerable<OperationRecord>> GetFilteredAsync(
+            string? panelId, string? lotId, string? carrierId,
+            DateTime? date, TimeSpan? time)
+        {
+            using var connection = CreateConnection();
+            var sql = "SELECT * FROM operation_records WHERE 1=1";
+
+            var parameters = new DynamicParameters();
+
+            if (!string.IsNullOrWhiteSpace(panelId) && long.TryParse(panelId, out long p))
+            {
+                sql += " AND PanelID = @PanelID";
+                parameters.Add("PanelID", p);
+            }
+
+            if (!string.IsNullOrWhiteSpace(lotId) && long.TryParse(lotId, out long l))
+            {
+                sql += " AND LOTID = @LOTID";
+                parameters.Add("LOTID", l);
+            }
+
+            if (!string.IsNullOrWhiteSpace(carrierId) && long.TryParse(carrierId, out long c))
+            {
+                sql += " AND CarrierID = @CarrierID";
+                parameters.Add("CarrierID", c);
+            }
+
+            if (date.HasValue)
+            {
+                if (time.HasValue)
+                {
+                    sql += " AND Time = @ExactTime";
+                    parameters.Add("ExactTime", date.Value + time.Value);
+                }
+                else
+                {
+                    sql += " AND Time >= @StartOfDay AND Time <= @EndOfDay";
+                    parameters.Add("StartOfDay", date.Value);
+                    parameters.Add("EndOfDay", date.Value.AddDays(1).AddTicks(-1));
+                }
+            }
+
+            sql += " ORDER BY PanelID ASC, LOTID ASC, CarrierID ASC, Time ASC";
+
+            return await connection.QueryAsync<OperationRecord>(sql, parameters);
+        }
+
+        public async Task InsertAsync(OperationRecord record)
+        {
+            using var connection = CreateConnection();
+            string sql = @"INSERT INTO operation_records (Time, PanelID, LOTID, CarrierID) 
+                           VALUES (@Time, @PanelID, @LOTID, @CarrierID)";
+            await connection.ExecuteAsync(sql, record);
+
+            await InsertLogAsync(new SystemLog
+            {
+                OperationTime = DateTime.Now,
+                MachineName = Environment.MachineName,
+                OperationType = "新增",
+                AffectedData = $"Panel ID : {record.PanelID}",
+                DetailDescription = $"Time: {record.Time}\nLOTID: {record.LOTID}\nCarrierID: {record.CarrierID}"
+            });
+        }
+
+        public async Task UpdateAsync(OperationRecord record)
+        {
+            using var connection = CreateConnection();
+
+            string selectSql = "SELECT * FROM operation_records WHERE Id = @Id";
+            var oldRecord = await connection.QueryFirstOrDefaultAsync<OperationRecord>(selectSql, new { record.Id });
+
+            string updateSql = @"UPDATE operation_records 
+                         SET Time = @Time, PanelID = @PanelID, LOTID = @LOTID, CarrierID = @CarrierID 
+                         WHERE Id = @Id";
+            await connection.ExecuteAsync(updateSql, record);
+
+            string panelIdChange = oldRecord != null
+                ? $"{oldRecord.PanelID} -> {record.PanelID}"
+                : $"{record.PanelID}";
+
+            await InsertLogAsync(new SystemLog
+            {
+                OperationTime = DateTime.Now,
+                MachineName = Environment.MachineName,
+                OperationType = "修改",
+                AffectedData = $"Panel ID : {panelIdChange}",
+                DetailDescription = $"Time: {record.Time}\nLOTID: {record.LOTID}\nCarrierID: {record.CarrierID}"
+            });
+        }
+
+
+        public async Task DeleteAsync(int id)
+        {
+            using var connection = CreateConnection();
+
+            string selectSql = "SELECT * FROM operation_records WHERE Id = @id";
+            var record = await connection.QueryFirstOrDefaultAsync<OperationRecord>(selectSql, new { id });
+
+            if (record != null)
+            {
+                string sql = "DELETE FROM operation_records WHERE Id = @id";
+                await connection.ExecuteAsync(sql, new { id });
+
+                await InsertLogAsync(new SystemLog
+                {
+                    OperationTime = DateTime.Now,
+                    MachineName = Environment.MachineName,
+                    OperationType = "刪除",
+                    AffectedData = $"Panel ID : {record.PanelID}",
+                    DetailDescription = $"Time: {record.Time}\nLOT ID : {record.LOTID}\nCarrier ID : {record.CarrierID}"
+                });
+            }
+        }
+
+        public async Task DeleteBatchAsync(IEnumerable<int> ids)
+        {
+            var idList = ids.ToList();
+            if (!idList.Any()) return;
+
+            using var connection = CreateConnection();
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                string selectSql = "SELECT PanelID FROM operation_records WHERE Id = ANY(@Ids)";
+                var deletedPanelIds = await connection.QueryAsync<long>(selectSql, new { Ids = idList }, transaction);
+
+                string deletedIdsStr = deletedPanelIds.Count() > 50
+                    ? string.Join(", ", deletedPanelIds.Take(50)) + "..."
+                    : string.Join(", ", deletedPanelIds);
+
+                string deleteSql = "DELETE FROM operation_records WHERE Id = ANY(@Ids)";
+                int count = await connection.ExecuteAsync(deleteSql, new { Ids = idList }, transaction);
+
+                transaction.Commit();
+
+                await InsertLogAsync(new SystemLog
+                {
+                    OperationTime = DateTime.Now,
+                    MachineName = Environment.MachineName,
+                    OperationType = "批量刪除",
+                    AffectedData = $"{count} 筆資料",
+                    DetailDescription = $"PanelID: {deletedIdsStr}"
+                });
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+
+
+        public async Task<IEnumerable<SystemLog>> GetLogsAsync()
+        {
+            using var connection = CreateConnection();
+            string sql = "SELECT * FROM system_logs ORDER BY OperationTime DESC";
+            return await connection.QueryAsync<SystemLog>(sql);
+        }
+
+        public async Task InsertLogAsync(SystemLog log)
+        {
+            using var connection = CreateConnection();
+            string sql = @"INSERT INTO system_logs (OperationTime, MachineName, OperationType, AffectedData, DetailDescription) 
+                           VALUES (@OperationTime, @MachineName, @OperationType, @AffectedData, @DetailDescription)";
+            await connection.ExecuteAsync(sql, log);
+        }
+
+        public async Task ClearAllLogsAsync()
+        {
+            using var conn = CreateConnection();
+            string sql = "TRUNCATE TABLE system_logs RESTART IDENTITY;";
+            await conn.ExecuteAsync(sql);
+        }
+
+        public async Task ExportToExcelAsync(IEnumerable<OperationRecord> data, string filePath)
+        {
+            if (data == null || !data.Any()) throw new ArgumentException("無資料可匯出");
+
+            ExcelPackage.License.SetNonCommercialPersonal("DemoUser");
+
+            try
+            {
+                using var package = new ExcelPackage();
+                var worksheet = package.Workbook.Worksheets.Add("Operations");
+
+                worksheet.Cells[1, 1].Value = "Time";
+                worksheet.Cells[1, 2].Value = "PanelID";
+                worksheet.Cells[1, 3].Value = "LOTID";
+                worksheet.Cells[1, 4].Value = "CarrierID";
+
+                int row = 2;
+                foreach (var item in data)
+                {
+                    worksheet.Cells[row, 1].Value = item.Time.ToString("yyyy/MM/dd HH:mm:ss");
+                    worksheet.Cells[row, 2].Value = item.PanelID;
+                    worksheet.Cells[row, 3].Value = item.LOTID;
+                    worksheet.Cells[row, 4].Value = item.CarrierID;
+                    row++;
+                }
+
+                worksheet.Cells.AutoFitColumns();
+                File.WriteAllBytes(filePath, package.GetAsByteArray());
+
+                await InsertLogAsync(new SystemLog
+                {
+                    OperationTime = DateTime.Now,
+                    MachineName = Environment.MachineName,
+                    OperationType = "匯出",
+                    AffectedData = $"{Path.GetFileName(filePath)}\n{row - 2} 筆記錄",
+                    DetailDescription = $"檔案已儲存至: {Path.GetFullPath(filePath)}"
+                });
+            }
+            catch (Exception ex)
+            {
+                await InsertLogAsync(new SystemLog
+                {
+                    OperationTime = DateTime.Now,
+                    MachineName = Environment.MachineName,
+                    OperationType = "匯出失敗",
+                    AffectedData = "N/A",
+                    DetailDescription = $"路徑: {filePath}, 錯誤: {ex.Message}"
+                });
+                throw;
+            }
+        }
+
+        public async Task<string> ImportFromExcelAsync(string filePath)
+        {
+            if (!File.Exists(filePath)) return "檔案不存在";
+            ExcelPackage.License.SetNonCommercialPersonal("DemoUser");
+
+            var newRecords = new List<OperationRecord>();
+            int skipped = 0;
+
+            using (var package = new ExcelPackage(new FileInfo(filePath)))
+            {
+                var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+                if (worksheet?.Dimension == null) return "Excel 無資料";
+
+                int rowCount = worksheet.Dimension.Rows;
+                for (int row = 2; row <= rowCount; row++)
+                {
+                    var time = worksheet.Cells[row, 1].GetValue<DateTime?>();
+                    var panelId = worksheet.Cells[row, 2].GetValue<long?>();
+                    var lotId = worksheet.Cells[row, 3].GetValue<long?>();
+                    var carrierId = worksheet.Cells[row, 4].GetValue<long?>();
+
+                    if (time.HasValue && panelId.HasValue && lotId.HasValue && carrierId.HasValue)
+                    {
+                        newRecords.Add(new OperationRecord
+                        {
+                            Time = time.Value,
+                            PanelID = panelId.Value,
+                            LOTID = lotId.Value,
+                            CarrierID = carrierId.Value
+                        });
+                    }
+                    else
+                    {
+                        skipped++;
+                    }
+                }
+            }
+
+            if (!newRecords.Any()) return "無有效資料";
+
+            using var connection = CreateConnection();
+            connection.Open();
+
+            var minTime = newRecords.Min(r => r.Time);
+            var maxTime = newRecords.Max(r => r.Time);
+
+            string fetchSql = @"SELECT Time, PanelID, LOTID, CarrierID 
+                                FROM operation_records 
+                                WHERE Time BETWEEN @MinTime AND @MaxTime";
+
+            var existingData = await connection.QueryAsync<OperationRecord>(fetchSql, new { MinTime = minTime, MaxTime = maxTime });
+
+            var existingSet = new HashSet<string>(existingData.Select(r =>
+                $"{r.Time:yyyyMMddHHmmss}|{r.PanelID}|{r.LOTID}|{r.CarrierID}"));
+
+            var recordsToInsert = new List<OperationRecord>();
+            var currentBatchSet = new HashSet<string>();
+            int duplicates = 0;
+            int added = 0;
+
+            foreach (var rec in newRecords)
+            {
+                string key = $"{rec.Time:yyyyMMddHHmmss}|{rec.PanelID}|{rec.LOTID}|{rec.CarrierID}";
+                if (existingSet.Contains(key) || currentBatchSet.Contains(key))
+                {
+                    duplicates++;
+                    skipped++;
+                }
+                else
+                {
+                    recordsToInsert.Add(rec);
+                    currentBatchSet.Add(key);
+                    added++;
+                }
+            }
+
+            if (recordsToInsert.Any())
+            {
+                using var transaction = connection.BeginTransaction();
+                try
+                {
+                    string insertSql = @"INSERT INTO operation_records (Time, PanelID, LOTID, CarrierID) 
+                                         VALUES (@Time, @PanelID, @LOTID, @CarrierID)";
+                    await connection.ExecuteAsync(insertSql, recordsToInsert, transaction);
+                    transaction.Commit();
+                }
+                catch
+                {
+                    transaction.Rollback();
+                    throw;
+                }
+            }
+
+            string resultSummary = $"新增={added}, 重複={duplicates}, 略過={skipped}";
+
+            await InsertLogAsync(new SystemLog
+            {
+                OperationTime = DateTime.Now,
+                MachineName = Environment.MachineName,
+                OperationType = "匯入",
+                AffectedData = $"{Path.GetFileName(filePath)}\n{added} 筆",
+                DetailDescription = $"路徑: {Path.GetFullPath(filePath)}\n結果: {resultSummary}"
+            });
+
+            return resultSummary;
+        }
     }
 }
+
