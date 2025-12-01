@@ -55,7 +55,7 @@
 
                 <DataGridTextColumn Header="操作電腦名稱" 
                                     Binding="{Binding MachineName}" 
-                                    Width="120">
+                                    Width="140">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="VerticalAlignment" Value="Center"/>

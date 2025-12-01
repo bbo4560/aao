@@ -273,25 +273,83 @@ namespace TEST2
         {
             var dialog = new Window
             {
-                Title = "雙重驗證",
-                Width = 300,
-                Height = 180,
+                Title = "安全驗證",
+                Width = 360,
+                // 移除固定 Height，改用 SizeToContent
+                SizeToContent = SizeToContent.Height,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 ResizeMode = ResizeMode.NoResize,
+                WindowStyle = WindowStyle.SingleBorderWindow,
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 250, 252)),
                 Owner = this
             };
 
-            var stackPanel = new StackPanel { Margin = new Thickness(20) };
+            var mainGrid = new Grid { Margin = new Thickness(25) };
 
-            stackPanel.Children.Add(new TextBlock { Text = "請輸入密碼:", Margin = new Thickness(0, 0, 0, 10) });
+            // 改用 StackPanel 讓佈局自然堆疊，避免 Grid Row 高度計算錯誤
+            var contentStack = new StackPanel();
 
-            var passwordBox = new PasswordBox { Margin = new Thickness(0, 0, 0, 20) };
-            stackPanel.Children.Add(passwordBox);
+            // 1. 標題文字
+            contentStack.Children.Add(new TextBlock
+            {
+                Text = "雙重驗證",
+                FontSize = 18, // 稍微加大標題
+                FontWeight = FontWeights.Bold,
+                Foreground = System.Windows.Media.Brushes.Black
+            });
 
-            var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            contentStack.Children.Add(new TextBlock
+            {
+                Text = "請輸入密碼以確認刪除操作",
+                FontSize = 13,
+                Foreground = System.Windows.Media.Brushes.Gray,
+                Margin = new Thickness(0, 8, 0, 15) // 調整間距
+            });
 
-            var btnOk = new Button { Content = "確認刪除", Width = 80, Height = 30, Margin = new Thickness(0, 0, 10, 0), IsDefault = true };
-            var btnCancel = new Button { Content = "取消", Width = 80, Height = 30, IsCancel = true };
+            // 2. 密碼框
+            var passwordBox = new PasswordBox
+            {
+                Margin = new Thickness(0, 0, 0, 25), // 下方留多一點空間給按鈕
+                Height = 32,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(5, 0, 5, 0),
+                FontSize = 14
+            };
+            contentStack.Children.Add(passwordBox);
+
+            // 3. 按鈕區
+            var btnPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 0, 0, 5) // 底部留白
+            };
+
+            // 取消按鈕
+            var btnCancel = new Button
+            {
+                Content = "取消",
+                Width = 80,
+                Height = 32,
+                IsCancel = true,
+                Background = System.Windows.Media.Brushes.White,
+                BorderBrush = System.Windows.Media.Brushes.LightGray,
+                Foreground = System.Windows.Media.Brushes.DimGray,
+                Margin = new Thickness(0, 0, 10, 0) // 按鈕間距
+            };
+
+            // 確認按鈕
+            var btnOk = new Button
+            {
+                Content = "確認刪除",
+                Width = 90,
+                Height = 32,
+                IsDefault = true,
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 77, 79)),
+                Foreground = System.Windows.Media.Brushes.White,
+                FontWeight = FontWeights.Bold,
+                BorderThickness = new Thickness(0)
+            };
 
             bool result = false;
 
@@ -312,15 +370,21 @@ namespace TEST2
 
             btnCancel.Click += (s, e) => dialog.Close();
 
-            btnPanel.Children.Add(btnOk);
             btnPanel.Children.Add(btnCancel);
-            stackPanel.Children.Add(btnPanel);
+            btnPanel.Children.Add(btnOk);
 
-            dialog.Content = stackPanel;
+            contentStack.Children.Add(btnPanel);
+
+            // 將 StackPanel 放入 Grid (這裡其實可以直接放 contentStack 到 dialog.Content)
+            mainGrid.Children.Add(contentStack);
+            dialog.Content = mainGrid;
+
             dialog.ShowDialog();
 
             return result;
         }
+
+
 
     }
 }
