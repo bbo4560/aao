@@ -10,7 +10,8 @@ namespace TEST2
         public string? QueryCarrierID { get; private set; }
 
         public DateTime? QueryDate { get; private set; }
-        public TimeSpan? QueryTime { get; private set; }
+
+        public string? QueryTimeInput { get; private set; }
 
         public QueryWindow()
         {
@@ -18,32 +19,29 @@ namespace TEST2
         }
 
         private void BtnQuery_Click(object sender, RoutedEventArgs e)
-        {           
+        {
             if (!string.IsNullOrWhiteSpace(txtPanelID.Text))
-            {
                 QueryPanelID = txtPanelID.Text.Trim();
-            }
+
             if (!string.IsNullOrWhiteSpace(txtLOTID.Text))
-            {
                 QueryLOTID = txtLOTID.Text.Trim();
-            }
+
             if (!string.IsNullOrWhiteSpace(txtCarrierID.Text))
-            {
                 QueryCarrierID = txtCarrierID.Text.Trim();
-            }
+
             if (dpDate.SelectedDate.HasValue)
-            {
                 QueryDate = dpDate.SelectedDate.Value.Date;
-            }
+
             if (!string.IsNullOrWhiteSpace(txtTime.Text))
             {
-                if (TimeSpan.TryParse(txtTime.Text, out TimeSpan ts))
+                string t = txtTime.Text.Trim();
+                if (System.Text.RegularExpressions.Regex.IsMatch(t, @"^[0-9:]+$"))
                 {
-                    QueryTime = ts;
+                    QueryTimeInput = t;
                 }
                 else
                 {
-                    MessageBox.Show("時間格式錯誤 (請使用 HH:mm:ss)", "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show("時間格式僅允許數字與冒號 (例如 14 或 14:30)", "格式錯誤");
                     return;
                 }
             }
@@ -52,4 +50,5 @@ namespace TEST2
         }
     }
 }
+
 

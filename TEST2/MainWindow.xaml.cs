@@ -109,7 +109,7 @@ namespace TEST2
                         queryWindow.QueryLOTID,
                         queryWindow.QueryCarrierID,
                         queryWindow.QueryDate,
-                        queryWindow.QueryTime
+                        queryWindow.QueryTimeInput
                     );
 
                     _records.Clear();
@@ -154,7 +154,7 @@ namespace TEST2
             var saveFileDialog = new SaveFileDialog
             {
                 Filter = "Excel Files|*.xlsx",
-                FileName = $"Export_{DateTime.Now:yyyyMMddHHmmss}.xlsx"
+                FileName = $"PanelLog.xlsx"
             };
 
             if (saveFileDialog.ShowDialog() == true)
@@ -275,7 +275,6 @@ namespace TEST2
             {
                 Title = "安全驗證",
                 Width = 360,
-                // 移除固定 Height，改用 SizeToContent
                 SizeToContent = SizeToContent.Height,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 ResizeMode = ResizeMode.NoResize,
@@ -285,15 +284,12 @@ namespace TEST2
             };
 
             var mainGrid = new Grid { Margin = new Thickness(25) };
-
-            // 改用 StackPanel 讓佈局自然堆疊，避免 Grid Row 高度計算錯誤
             var contentStack = new StackPanel();
 
-            // 1. 標題文字
             contentStack.Children.Add(new TextBlock
             {
                 Text = "雙重驗證",
-                FontSize = 18, // 稍微加大標題
+                FontSize = 18,
                 FontWeight = FontWeights.Bold,
                 Foreground = System.Windows.Media.Brushes.Black
             });
@@ -303,13 +299,12 @@ namespace TEST2
                 Text = "請輸入密碼以確認刪除操作",
                 FontSize = 13,
                 Foreground = System.Windows.Media.Brushes.Gray,
-                Margin = new Thickness(0, 8, 0, 15) // 調整間距
+                Margin = new Thickness(0, 8, 0, 15) 
             });
 
-            // 2. 密碼框
             var passwordBox = new PasswordBox
             {
-                Margin = new Thickness(0, 0, 0, 25), // 下方留多一點空間給按鈕
+                Margin = new Thickness(0, 0, 0, 25),
                 Height = 32,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(5, 0, 5, 0),
@@ -317,15 +312,13 @@ namespace TEST2
             };
             contentStack.Children.Add(passwordBox);
 
-            // 3. 按鈕區
             var btnPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 0, 0, 5) // 底部留白
+                Margin = new Thickness(0, 0, 0, 5) 
             };
 
-            // 取消按鈕
             var btnCancel = new Button
             {
                 Content = "取消",
@@ -335,10 +328,9 @@ namespace TEST2
                 Background = System.Windows.Media.Brushes.White,
                 BorderBrush = System.Windows.Media.Brushes.LightGray,
                 Foreground = System.Windows.Media.Brushes.DimGray,
-                Margin = new Thickness(0, 0, 10, 0) // 按鈕間距
+                Margin = new Thickness(0, 0, 10, 0)
             };
 
-            // 確認按鈕
             var btnOk = new Button
             {
                 Content = "確認刪除",
@@ -369,22 +361,15 @@ namespace TEST2
             };
 
             btnCancel.Click += (s, e) => dialog.Close();
-
             btnPanel.Children.Add(btnCancel);
             btnPanel.Children.Add(btnOk);
 
             contentStack.Children.Add(btnPanel);
-
-            // 將 StackPanel 放入 Grid (這裡其實可以直接放 contentStack 到 dialog.Content)
             mainGrid.Children.Add(contentStack);
+
             dialog.Content = mainGrid;
-
             dialog.ShowDialog();
-
             return result;
         }
-
-
-
     }
 }

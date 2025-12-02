@@ -95,50 +95,43 @@ namespace TEST2
 
         public async Task<IEnumerable<OperationRecord>> GetFilteredAsync(
             string? panelId, string? lotId, string? carrierId,
-            DateTime? date, TimeSpan? time)
+            DateTime? date, string? timeInput) 
         {
             using var connection = CreateConnection();
             var sql = "SELECT * FROM operation_records WHERE 1=1";
-
             var parameters = new DynamicParameters();
 
-            if (!string.IsNullOrWhiteSpace(panelId) && long.TryParse(panelId, out long p))
+            if (!string.IsNullOrWhiteSpace(panelId))
             {
                 sql += " AND PanelID = @PanelID";
-                parameters.Add("PanelID", p);
+                parameters.Add("PanelID", long.Parse(panelId));
             }
-
-            if (!string.IsNullOrWhiteSpace(lotId) && long.TryParse(lotId, out long l))
+            if (!string.IsNullOrWhiteSpace(lotId))
             {
                 sql += " AND LOTID = @LOTID";
-                parameters.Add("LOTID", l);
+                parameters.Add("LOTID", long.Parse(lotId));
             }
-
-            if (!string.IsNullOrWhiteSpace(carrierId) && long.TryParse(carrierId, out long c))
+            if (!string.IsNullOrWhiteSpace(carrierId))
             {
                 sql += " AND CarrierID = @CarrierID";
-                parameters.Add("CarrierID", c);
+                parameters.Add("CarrierID", long.Parse(carrierId));
             }
-
             if (date.HasValue)
             {
-                if (time.HasValue)
-                {
-                    sql += " AND Time = @ExactTime";
-                    parameters.Add("ExactTime", date.Value + time.Value);
-                }
-                else
-                {
-                    sql += " AND Time >= @StartOfDay AND Time <= @EndOfDay";
-                    parameters.Add("StartOfDay", date.Value);
-                    parameters.Add("EndOfDay", date.Value.AddDays(1).AddTicks(-1));
-                }
+                sql += " AND Time >= @StartOfDay AND Time < @NextDay";
+                parameters.Add("StartOfDay", date.Value.Date);
+                parameters.Add("NextDay", date.Value.Date.AddDays(1));
             }
-
+            if (!string.IsNullOrWhiteSpace(timeInput))
+            {
+                sql += " AND TO_CHAR(Time, 'HH24:MI:SS') LIKE @TimePattern";
+                parameters.Add("TimePattern", $"{timeInput}%");
+            }
             sql += " ORDER BY PanelID ASC, LOTID ASC, CarrierID ASC, Time ASC";
 
             return await connection.QueryAsync<OperationRecord>(sql, parameters);
         }
+
 
         public async Task InsertAsync(OperationRecord record)
         {
@@ -170,7 +163,7 @@ namespace TEST2
             await connection.ExecuteAsync(updateSql, record);
 
             string panelIdChange = oldRecord != null
-                ? $"{oldRecord.PanelID} -> {record.PanelID}"
+                ? $"{oldRecord.PanelID} ➜ {record.PanelID}"
                 : $"{record.PanelID}";
 
             await InsertLogAsync(new SystemLog
@@ -245,7 +238,6 @@ namespace TEST2
                 throw;
             }
         }
-
 
         public async Task<IEnumerable<SystemLog>> GetLogsAsync()
         {
@@ -328,6 +320,7 @@ namespace TEST2
 
             var newRecords = new List<OperationRecord>();
             int skipped = 0;
+            int formatError = 0;
 
             using (var package = new ExcelPackage(new FileInfo(filePath)))
             {
@@ -337,44 +330,66 @@ namespace TEST2
                 int rowCount = worksheet.Dimension.Rows;
                 for (int row = 2; row <= rowCount; row++)
                 {
-                    var time = worksheet.Cells[row, 1].GetValue<DateTime?>();
-                    var panelId = worksheet.Cells[row, 2].GetValue<long?>();
-                    var lotId = worksheet.Cells[row, 3].GetValue<long?>();
-                    var carrierId = worksheet.Cells[row, 4].GetValue<long?>();
+                    var val1 = worksheet.Cells[row, 1].Text;
+                    var val2 = worksheet.Cells[row, 2].Text;
+                    var val3 = worksheet.Cells[row, 3].Text;
+                    var val4 = worksheet.Cells[row, 4].Text;
 
-                    if (time.HasValue && panelId.HasValue && lotId.HasValue && carrierId.HasValue)
+                    if (string.IsNullOrWhiteSpace(val1) && string.IsNullOrWhiteSpace(val2) &&
+                        string.IsNullOrWhiteSpace(val3) && string.IsNullOrWhiteSpace(val4))
                     {
-                        newRecords.Add(new OperationRecord
-                        {
-                            Time = time.Value,
-                            PanelID = panelId.Value,
-                            LOTID = lotId.Value,
-                            CarrierID = carrierId.Value
-                        });
+                        continue;
                     }
-                    else
+
+                    try
                     {
-                        skipped++;
+                        var time = worksheet.Cells[row, 1].GetValue<DateTime?>();
+                        var panelId = worksheet.Cells[row, 2].GetValue<long?>();
+                        var lotId = worksheet.Cells[row, 3].GetValue<long?>();
+                        var carrierId = worksheet.Cells[row, 4].GetValue<long?>();
+
+                        if (time.HasValue && panelId.HasValue && lotId.HasValue && carrierId.HasValue)
+                        {
+                            newRecords.Add(new OperationRecord
+                            {
+                                Time = time.Value,
+                                PanelID = panelId.Value,
+                                LOTID = lotId.Value,
+                                CarrierID = carrierId.Value
+                            });
+                        }
+                        else
+                        {
+                            skipped++;
+                        }
+                    }
+                    catch
+                    {
+                        formatError++;
                     }
                 }
             }
 
-            if (!newRecords.Any()) return "無有效資料";
+            if (!newRecords.Any() && formatError == 0) return "無有效資料";
 
             using var connection = CreateConnection();
             connection.Open();
 
-            var minTime = newRecords.Min(r => r.Time);
-            var maxTime = newRecords.Max(r => r.Time);
+            var minTime = newRecords.Any() ? newRecords.Min(r => r.Time) : DateTime.MinValue;
+            var maxTime = newRecords.Any() ? newRecords.Max(r => r.Time) : DateTime.MaxValue;
 
-            string fetchSql = @"SELECT Time, PanelID, LOTID, CarrierID 
-                                FROM operation_records 
-                                WHERE Time BETWEEN @MinTime AND @MaxTime";
+            var existingSet = new HashSet<string>();
+            if (newRecords.Any())
+            {
+                string fetchSql = @"SELECT Time, PanelID, LOTID, CarrierID 
+                            FROM operation_records 
+                            WHERE Time BETWEEN @MinTime AND @MaxTime";
 
-            var existingData = await connection.QueryAsync<OperationRecord>(fetchSql, new { MinTime = minTime, MaxTime = maxTime });
+                var existingData = await connection.QueryAsync<OperationRecord>(fetchSql, new { MinTime = minTime, MaxTime = maxTime });
 
-            var existingSet = new HashSet<string>(existingData.Select(r =>
-                $"{r.Time:yyyyMMddHHmmss}|{r.PanelID}|{r.LOTID}|{r.CarrierID}"));
+                existingSet = new HashSet<string>(existingData.Select(r =>
+                    $"{r.Time:yyyyMMddHHmmss}|{r.PanelID}|{r.LOTID}|{r.CarrierID}"));
+            }
 
             var recordsToInsert = new List<OperationRecord>();
             var currentBatchSet = new HashSet<string>();
@@ -403,7 +418,7 @@ namespace TEST2
                 try
                 {
                     string insertSql = @"INSERT INTO operation_records (Time, PanelID, LOTID, CarrierID) 
-                                         VALUES (@Time, @PanelID, @LOTID, @CarrierID)";
+                                 VALUES (@Time, @PanelID, @LOTID, @CarrierID)";
                     await connection.ExecuteAsync(insertSql, recordsToInsert, transaction);
                     transaction.Commit();
                 }
@@ -414,7 +429,7 @@ namespace TEST2
                 }
             }
 
-            string resultSummary = $"新增={added}, 重複={duplicates}, 略過={skipped}";
+            string resultSummary = $"新增: {added}, 失敗: {formatError}, 略過: {skipped} (含重複)";
 
             await InsertLogAsync(new SystemLog
             {
@@ -427,6 +442,7 @@ namespace TEST2
 
             return resultSummary;
         }
+
     }
 }
 

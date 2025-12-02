@@ -17,20 +17,38 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <Button x:Name="BtnClear"
-                    Grid.Column="1"
-                    Content="清除所有紀錄" 
-                    Click="BtnClear_Click"
-                    Padding="10,5"
-                    Foreground="White"
-                    FontWeight="Bold"
-                    BorderThickness="0">
-                <Button.Resources>
-                    <Style TargetType="Border">
-                        <Setter Property="CornerRadius" Value="3"/>
-                    </Style>
-                </Button.Resources>
-            </Button>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button x:Name="BtnExport"
+                        Content="匯出 Excel" 
+                        Click="BtnExport_Click"
+                        Padding="15,5"
+                        Margin="0,0,10,0"
+                        Foreground="White"
+                        Background="#217346"
+                        FontWeight="Bold"
+                        BorderThickness="0">
+                    <Button.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="3"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+
+                <Button x:Name="BtnClear"
+                        Content="清除所有紀錄" 
+                        Click="BtnClear_Click"
+                        Padding="15,5"
+                        Foreground="White"
+                        Background="#FF4D4F"
+                        FontWeight="Bold"
+                        BorderThickness="0">
+                    <Button.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="3"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <DataGrid x:Name="logGrid" Grid.Row="1"
@@ -39,7 +57,7 @@
                   CanUserReorderColumns="False" 
                   IsReadOnly="True"
                   VerticalScrollBarVisibility="Auto"
-                  RowHeight="67">
+                  RowHeight="80">
 
             <DataGrid.Columns>
                 <DataGridTextColumn Header="操作時間" 
@@ -109,13 +127,3 @@
         </DataGrid>
     </Grid>
 </Window>
-
-
-
-
-
-
-
-
-
-
