@@ -1,14 +1,14 @@
 ﻿using Microsoft.Win32;
-using OfficeOpenXml;
 using System;
 using System.Collections.ObjectModel;
 using System.Configuration;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace TEST2
 {
@@ -17,10 +17,10 @@ namespace TEST2
         private readonly DatabaseService _dbService;
         private ObservableCollection<OperationRecord> _records = new ObservableCollection<OperationRecord>();
         private readonly string ConnectionString = ConfigurationManager.ConnectionStrings["MyDbConnection"].ConnectionString;
+
         public MainWindow()
         {
             InitializeComponent();
-            string machineName = Environment.MachineName;
             this.Title = Environment.MachineName;
             _dbService = new DatabaseService(ConnectionString);
             dataGrid.ItemsSource = _records;
@@ -33,13 +33,12 @@ namespace TEST2
             {
                 DatabaseService.EnsureDatabaseExists(ConnectionString);
                 await _dbService.InitializeDatabaseAsync();
-                await LoadDataAsync();
+                await ReloadDataAndUpdateTimeAsync();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Initialization Error (Check Connection String): {ex.Message}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Initialization Error: {ex.Message}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-            UpdateLastOpTime();
         }
 
         private void UpdateLastOpTime()
@@ -64,41 +63,100 @@ namespace TEST2
             }
         }
 
-        private async void BtnShowAll_Click(object sender, RoutedEventArgs e)
+        private async Task ReloadDataAndUpdateTimeAsync()
         {
             await LoadDataAsync();
             UpdateLastOpTime();
         }
 
-        private async void BtnAdd_Click(object sender, RoutedEventArgs e)
-
+        private async Task ExecuteDbOperationAsync(Func<Task> operation, string? successMessage = null)
         {
-            var addWindow = new AddRecordWindow();
-            addWindow.Owner = this;
+            try
+            {
+                await operation();
+                await ReloadDataAndUpdateTimeAsync();
+
+                if (!string.IsNullOrEmpty(successMessage))
+                {
+                    MessageBox.Show(successMessage, "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"發生錯誤: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.F1)
+            {
+                BtnAdd_Click(BtnAdd, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F2)
+            {
+                BtnQuery_Click(BtnQuery, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F3)
+            {
+                BtnImport_Click(BtnImport, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F4)
+            {
+                BtnExport_Click(BtnExport, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F5)
+            {
+                BtnShowAll_Click(BtnShowAll, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F6)
+            {
+                BtnLog_Click(BtnLog, new RoutedEventArgs());
+                e.Handled = true;
+            }
+        }
+
+        private void DataGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Delete)
+            {
+                BtnBatchDelete_Click(BtnBatchDelete, new RoutedEventArgs());
+                e.Handled = true;
+            }
+        }
+
+        private async void BtnShowAll_Click(object sender, RoutedEventArgs e)
+        {
+            await ReloadDataAndUpdateTimeAsync();
+        }
+
+        private async void BtnAdd_Click(object sender, RoutedEventArgs e)
+        {
+            var addWindow = new AddRecordWindow
+            {
+                Owner = this
+            };
 
             if (addWindow.ShowDialog() == true)
             {
                 var newRecord = addWindow.NewRecord;
                 if (newRecord != null)
                 {
-                    try
-                    {
-                        await _dbService.InsertAsync(newRecord);
-                        await LoadDataAsync();
-                        UpdateLastOpTime();
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Error adding record: {ex.Message}");
-                    }
+                    await ExecuteDbOperationAsync(
+                        () => _dbService.InsertAsync(newRecord)
+                    );
                 }
             }
         }
 
         private async void BtnQuery_Click(object sender, RoutedEventArgs e)
         {
-            var queryWindow = new QueryWindow();
-            queryWindow.Owner = this;
+            var queryWindow = new QueryWindow { Owner = this };
 
             if (queryWindow.ShowDialog() == true)
             {
@@ -113,15 +171,23 @@ namespace TEST2
                     );
 
                     _records.Clear();
-                    foreach (var item in data)
+
+                    if (data == null || !data.Any())
                     {
-                        _records.Add(item);
+                        MessageBox.Show("查無符合條件的資料。", "查詢結果",MessageBoxButton.OK, MessageBoxImage.Information);
+                        await ReloadDataAndUpdateTimeAsync();
+                        return;
                     }
+
+                    foreach (var item in data)
+                        _records.Add(item);
+
                     UpdateLastOpTime();
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"查詢失敗: {ex.Message}", "Error");
+                    MessageBox.Show($"查詢失敗：{ex.Message}", "Error",MessageBoxButton.OK, MessageBoxImage.Error);
+                    await ReloadDataAndUpdateTimeAsync();
                 }
             }
         }
@@ -138,9 +204,8 @@ namespace TEST2
                 try
                 {
                     var result = await _dbService.ImportFromExcelAsync(openFileDialog.FileName);
-                    await LoadDataAsync();
+                    await ReloadDataAndUpdateTimeAsync();
                     MessageBox.Show($"匯入成功!\n\n{result}", "Success");
-                    UpdateLastOpTime();
                 }
                 catch (Exception ex)
                 {
@@ -151,10 +216,28 @@ namespace TEST2
 
         private async void BtnExport_Click(object sender, RoutedEventArgs e)
         {
+            if (_records.Count == 0)
+            {
+                MessageBox.Show("目前沒有資料可供匯出。", "提示",MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var format = MessageBox.Show("要匯出成 Excel (.xlsx) 嗎？\n\n按「是」= Excel\n按「否」= SQLite 資料庫 (.db)",
+                                         "選擇匯出格式",
+                                         MessageBoxButton.YesNoCancel,
+                                         MessageBoxImage.Question);
+
+            if (format == MessageBoxResult.Cancel)
+                return;
+
+            bool exportExcel = (format == MessageBoxResult.Yes);
+
             var saveFileDialog = new SaveFileDialog
             {
-                Filter = "Excel Files|*.xlsx",
-                FileName = $"PanelLog.xlsx"
+                Filter = exportExcel
+                    ? "Excel 檔案 (*.xlsx)|*.xlsx"
+                    : "SQLite 資料庫 (*.db)|*.db",
+                FileName = exportExcel ? "PanelLog.xlsx" : "PanelLog.db"
             };
 
             if (saveFileDialog.ShowDialog() == true)
@@ -162,15 +245,38 @@ namespace TEST2
                 try
                 {
                     BtnExport.IsEnabled = false;
-                    Cursor = Cursors.Wait; 
-                    await _dbService.ExportToExcelAsync(_records, saveFileDialog.FileName);
+                    Cursor = Cursors.Wait;
 
-                    MessageBox.Show("匯出成功!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
-                    UpdateLastOpTime(); 
+                    var dataToExport = _records.ToList();
+                    string filePath = saveFileDialog.FileName;
+
+                    if (exportExcel)
+                    {
+                        await _dbService.ExportToExcelAsync(dataToExport, filePath);
+                    }
+                    else
+                    {
+                        await Task.Run(() => _dbService.ExportPanelRecordsToDb(filePath, dataToExport));
+
+                        await _dbService.InsertLogAsync(new SystemLog
+                        {
+                            OperationTime = DateTime.Now,
+                            UserName = Environment.UserName,
+                            MachineName = Environment.MachineName,
+                            OperationType = "匯出 Panel 紀錄",
+                            AffectedData = $"{dataToExport.Count} 筆",
+                            DetailDescription = $"匯出至檔案路徑: {filePath}"
+                        });
+                    }
+
+                    await ReloadDataAndUpdateTimeAsync();
+                    MessageBox.Show($"匯出成功!\n檔案已儲存至: {filePath}",
+                                    "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"匯出失敗: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show($"匯出失敗: {ex.Message}",
+                                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 finally
                 {
@@ -180,11 +286,12 @@ namespace TEST2
             }
         }
 
-
         private void BtnLog_Click(object sender, RoutedEventArgs e)
         {
-            var logWindow = new LogWindow(_dbService);
-            logWindow.Owner = this;
+            var logWindow = new LogWindow(_dbService)
+            {
+                Owner = this
+            };
             logWindow.ShowDialog();
         }
 
@@ -194,26 +301,20 @@ namespace TEST2
 
             if (selectedRecords.Count == 0)
             {
-                MessageBox.Show("請先選取要刪除的資料", "提示");
                 return;
             }
 
-            if (MessageBox.Show($"確定要刪除選取的 {selectedRecords.Count} 筆資料嗎?", "確認", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+            if (MessageBox.Show($"確定要刪除選取的 {selectedRecords.Count} 筆資料嗎?",
+                                "確認",
+                                MessageBoxButton.YesNo,
+                                MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
                 if (ShowPasswordConfirmDialog())
                 {
-                    try
-                    {
-                        var ids = selectedRecords.Select(r => r.Id);
-                        await _dbService.DeleteBatchAsync(ids);
-                        await LoadDataAsync();
-                        UpdateLastOpTime();
-                        MessageBox.Show("批量刪除成功!", "Success");
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"批量刪除失敗: {ex.Message}", "Error");
-                    }
+                    var ids = selectedRecords.Select(r => r.Id);
+                    await ExecuteDbOperationAsync(
+                        () => _dbService.DeleteBatchAsync(ids),
+                        "批量刪除成功!");
                 }
             }
         }
@@ -226,16 +327,9 @@ namespace TEST2
                 {
                     if (ShowPasswordConfirmDialog())
                     {
-                        try
-                        {
-                            await _dbService.DeleteAsync(record.Id);
-                            await LoadDataAsync();
-                            UpdateLastOpTime();
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show($"刪除失敗: {ex.Message}", "Error");
-                        }
+                        await ExecuteDbOperationAsync(
+                            () => _dbService.DeleteAsync(record.Id)
+                        );
                     }
                 }
             }
@@ -245,25 +339,19 @@ namespace TEST2
         {
             if (sender is Button btn && btn.DataContext is OperationRecord record)
             {
-                var modifyWindow = new ModifyRecordWindow(record);
-                modifyWindow.Owner = this;
+                var modifyWindow = new ModifyRecordWindow(record)
+                {
+                    Owner = this
+                };
 
                 if (modifyWindow.ShowDialog() == true)
                 {
                     var updatedRecord = modifyWindow.ModifiedRecord;
-
                     if (updatedRecord != null)
                     {
-                        try
-                        {
-                            await _dbService.UpdateAsync(updatedRecord);
-                            await LoadDataAsync();
-                            UpdateLastOpTime();
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show($"修改失敗: {ex.Message}", "Error");
-                        }
+                        await ExecuteDbOperationAsync(
+                            () => _dbService.UpdateAsync(updatedRecord)
+                        );
                     }
                 }
             }
@@ -279,7 +367,7 @@ namespace TEST2
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStyle = WindowStyle.SingleBorderWindow,
-                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 250, 252)),
+                Background = new SolidColorBrush(Color.FromRgb(250, 250, 252)),
                 Owner = this
             };
 
@@ -291,15 +379,15 @@ namespace TEST2
                 Text = "雙重驗證",
                 FontSize = 18,
                 FontWeight = FontWeights.Bold,
-                Foreground = System.Windows.Media.Brushes.Black
+                Foreground = Brushes.Black
             });
 
             contentStack.Children.Add(new TextBlock
             {
-                Text = "請輸入密碼以確認刪除操作",
+                Text = "請輸入密碼以確認操作",
                 FontSize = 13,
-                Foreground = System.Windows.Media.Brushes.Gray,
-                Margin = new Thickness(0, 8, 0, 15) 
+                Foreground = Brushes.Gray,
+                Margin = new Thickness(0, 8, 0, 15)
             });
 
             var passwordBox = new PasswordBox
@@ -316,7 +404,7 @@ namespace TEST2
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 0, 0, 5) 
+                Margin = new Thickness(0, 0, 0, 5)
             };
 
             var btnCancel = new Button
@@ -325,20 +413,20 @@ namespace TEST2
                 Width = 80,
                 Height = 32,
                 IsCancel = true,
-                Background = System.Windows.Media.Brushes.White,
-                BorderBrush = System.Windows.Media.Brushes.LightGray,
-                Foreground = System.Windows.Media.Brushes.DimGray,
+                Background = Brushes.White,
+                BorderBrush = Brushes.LightGray,
+                Foreground = Brushes.DimGray,
                 Margin = new Thickness(0, 0, 10, 0)
             };
 
             var btnOk = new Button
             {
-                Content = "確認刪除",
+                Content = "確認",
                 Width = 90,
                 Height = 32,
                 IsDefault = true,
-                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 77, 79)),
-                Foreground = System.Windows.Media.Brushes.White,
+                Background = new SolidColorBrush(Color.FromRgb(255, 77, 79)),
+                Foreground = Brushes.White,
                 FontWeight = FontWeights.Bold,
                 BorderThickness = new Thickness(0)
             };
@@ -368,8 +456,11 @@ namespace TEST2
             mainGrid.Children.Add(contentStack);
 
             dialog.Content = mainGrid;
+            dialog.Loaded += (s, e) => passwordBox.Focus();
             dialog.ShowDialog();
             return result;
         }
     }
 }
+
+

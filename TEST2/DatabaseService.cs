@@ -4,6 +4,7 @@ using OfficeOpenXml;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.SQLite;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -49,23 +50,25 @@ namespace TEST2
             using var connection = CreateConnection();
 
             string createSql = @"
-                CREATE TABLE IF NOT EXISTS operation_records (
-                    Id SERIAL PRIMARY KEY,
-                    Time TIMESTAMP,
-                    PanelID BIGINT,
-                    LOTID BIGINT,
-                    CarrierID BIGINT
-                );
-                
-                CREATE TABLE IF NOT EXISTS system_logs (
-                    Id SERIAL PRIMARY KEY,
-                    OperationTime TIMESTAMP,
-                    MachineName TEXT,
-                    OperationType TEXT,
-                    AffectedData TEXT,
-                    DetailDescription TEXT
-                );";
+        CREATE TABLE IF NOT EXISTS operation_records (
+            Id SERIAL PRIMARY KEY,
+            Time TIMESTAMP,
+            PanelID BIGINT,
+            LOTID BIGINT,
+            CarrierID BIGINT
+        );
+        
+        CREATE TABLE IF NOT EXISTS system_logs (
+            Id SERIAL PRIMARY KEY,
+            OperationTime TIMESTAMP,
+            UserName TEXT,
+            MachineName TEXT,
+            OperationType TEXT,
+            AffectedData TEXT,
+            DetailDescription TEXT
+        );";
             await connection.ExecuteAsync(createSql);
+
             try
             {
                 var checkSql = "SELECT data_type FROM information_schema.columns WHERE table_name = 'operation_records' AND column_name = 'panelid'";
@@ -74,10 +77,10 @@ namespace TEST2
                 if (dataType != null && (dataType.Equals("text", StringComparison.OrdinalIgnoreCase) || dataType.Contains("character", StringComparison.OrdinalIgnoreCase)))
                 {
                     string alterSql = @"
-                        ALTER TABLE operation_records 
-                        ALTER COLUMN PanelID TYPE BIGINT USING PanelID::bigint,
-                        ALTER COLUMN LOTID TYPE BIGINT USING LOTID::bigint,
-                        ALTER COLUMN CarrierID TYPE BIGINT USING CarrierID::bigint;";
+                ALTER TABLE operation_records 
+                ALTER COLUMN PanelID TYPE BIGINT USING PanelID::bigint,
+                ALTER COLUMN LOTID TYPE BIGINT USING LOTID::bigint,
+                ALTER COLUMN CarrierID TYPE BIGINT USING CarrierID::bigint;";
                     await connection.ExecuteAsync(alterSql);
                 }
             }
@@ -85,6 +88,7 @@ namespace TEST2
             {
             }
         }
+
 
         public async Task<IEnumerable<OperationRecord>> GetAllAsync()
         {
@@ -95,7 +99,7 @@ namespace TEST2
 
         public async Task<IEnumerable<OperationRecord>> GetFilteredAsync(
             string? panelId, string? lotId, string? carrierId,
-            DateTime? date, string? timeInput) 
+            DateTime? date, string? timeInput)
         {
             using var connection = CreateConnection();
             var sql = "SELECT * FROM operation_records WHERE 1=1";
@@ -106,49 +110,57 @@ namespace TEST2
                 sql += " AND PanelID = @PanelID";
                 parameters.Add("PanelID", long.Parse(panelId));
             }
+
             if (!string.IsNullOrWhiteSpace(lotId))
             {
                 sql += " AND LOTID = @LOTID";
                 parameters.Add("LOTID", long.Parse(lotId));
             }
+
             if (!string.IsNullOrWhiteSpace(carrierId))
             {
                 sql += " AND CarrierID = @CarrierID";
                 parameters.Add("CarrierID", long.Parse(carrierId));
             }
+
             if (date.HasValue)
             {
                 sql += " AND Time >= @StartOfDay AND Time < @NextDay";
                 parameters.Add("StartOfDay", date.Value.Date);
                 parameters.Add("NextDay", date.Value.Date.AddDays(1));
             }
+
             if (!string.IsNullOrWhiteSpace(timeInput))
             {
                 sql += " AND TO_CHAR(Time, 'HH24:MI:SS') LIKE @TimePattern";
                 parameters.Add("TimePattern", $"{timeInput}%");
             }
+
             sql += " ORDER BY PanelID ASC, LOTID ASC, CarrierID ASC, Time ASC";
 
             return await connection.QueryAsync<OperationRecord>(sql, parameters);
         }
 
 
+
         public async Task InsertAsync(OperationRecord record)
         {
             using var connection = CreateConnection();
             string sql = @"INSERT INTO operation_records (Time, PanelID, LOTID, CarrierID) 
-                           VALUES (@Time, @PanelID, @LOTID, @CarrierID)";
+                   VALUES (@Time, @PanelID, @LOTID, @CarrierID)";
             await connection.ExecuteAsync(sql, record);
 
             await InsertLogAsync(new SystemLog
             {
                 OperationTime = DateTime.Now,
+                UserName = Environment.UserName,
                 MachineName = Environment.MachineName,
                 OperationType = "新增",
                 AffectedData = $"Panel ID : {record.PanelID}",
                 DetailDescription = $"Time: {record.Time}\nLOTID: {record.LOTID}\nCarrierID: {record.CarrierID}"
             });
         }
+
 
         public async Task UpdateAsync(OperationRecord record)
         {
@@ -158,8 +170,8 @@ namespace TEST2
             var oldRecord = await connection.QueryFirstOrDefaultAsync<OperationRecord>(selectSql, new { record.Id });
 
             string updateSql = @"UPDATE operation_records 
-                         SET Time = @Time, PanelID = @PanelID, LOTID = @LOTID, CarrierID = @CarrierID 
-                         WHERE Id = @Id";
+                 SET Time = @Time, PanelID = @PanelID, LOTID = @LOTID, CarrierID = @CarrierID 
+                 WHERE Id = @Id";
             await connection.ExecuteAsync(updateSql, record);
 
             string panelIdChange = oldRecord != null
@@ -169,6 +181,7 @@ namespace TEST2
             await InsertLogAsync(new SystemLog
             {
                 OperationTime = DateTime.Now,
+                UserName = Environment.UserName,
                 MachineName = Environment.MachineName,
                 OperationType = "修改",
                 AffectedData = $"Panel ID : {panelIdChange}",
@@ -192,6 +205,7 @@ namespace TEST2
                 await InsertLogAsync(new SystemLog
                 {
                     OperationTime = DateTime.Now,
+                    UserName = Environment.UserName,
                     MachineName = Environment.MachineName,
                     OperationType = "刪除",
                     AffectedData = $"Panel ID : {record.PanelID}",
@@ -199,6 +213,7 @@ namespace TEST2
                 });
             }
         }
+
 
         public async Task DeleteBatchAsync(IEnumerable<int> ids)
         {
@@ -226,6 +241,7 @@ namespace TEST2
                 await InsertLogAsync(new SystemLog
                 {
                     OperationTime = DateTime.Now,
+                    UserName = Environment.UserName,
                     MachineName = Environment.MachineName,
                     OperationType = "批量刪除",
                     AffectedData = $"{count} 筆資料",
@@ -239,6 +255,7 @@ namespace TEST2
             }
         }
 
+
         public async Task<IEnumerable<SystemLog>> GetLogsAsync()
         {
             using var connection = CreateConnection();
@@ -249,10 +266,14 @@ namespace TEST2
         public async Task InsertLogAsync(SystemLog log)
         {
             using var connection = CreateConnection();
-            string sql = @"INSERT INTO system_logs (OperationTime, MachineName, OperationType, AffectedData, DetailDescription) 
-                           VALUES (@OperationTime, @MachineName, @OperationType, @AffectedData, @DetailDescription)";
+            string sql = @"
+        INSERT INTO system_logs
+            (OperationTime, UserName, MachineName, OperationType, AffectedData, DetailDescription) 
+        VALUES
+            (@OperationTime, @UserName, @MachineName, @OperationType, @AffectedData, @DetailDescription)";
             await connection.ExecuteAsync(sql, log);
         }
+
 
         public async Task ClearAllLogsAsync()
         {
@@ -293,8 +314,9 @@ namespace TEST2
                 await InsertLogAsync(new SystemLog
                 {
                     OperationTime = DateTime.Now,
+                    UserName = Environment.UserName,
                     MachineName = Environment.MachineName,
-                    OperationType = "匯出",
+                    OperationType = "匯出 Excel",
                     AffectedData = $"{Path.GetFileName(filePath)}\n{row - 2} 筆記錄",
                     DetailDescription = $"檔案已儲存至: {Path.GetFullPath(filePath)}"
                 });
@@ -304,6 +326,7 @@ namespace TEST2
                 await InsertLogAsync(new SystemLog
                 {
                     OperationTime = DateTime.Now,
+                    UserName = Environment.UserName,
                     MachineName = Environment.MachineName,
                     OperationType = "匯出失敗",
                     AffectedData = "N/A",
@@ -312,6 +335,7 @@ namespace TEST2
                 throw;
             }
         }
+
 
         public async Task<string> ImportFromExcelAsync(string filePath)
         {
@@ -434,15 +458,72 @@ namespace TEST2
             await InsertLogAsync(new SystemLog
             {
                 OperationTime = DateTime.Now,
+                UserName = Environment.UserName,
                 MachineName = Environment.MachineName,
                 OperationType = "匯入",
                 AffectedData = $"{Path.GetFileName(filePath)}\n{added} 筆",
                 DetailDescription = $"路徑: {Path.GetFullPath(filePath)}\n結果: {resultSummary}"
             });
 
+
             return resultSummary;
         }
 
+        public void ExportPanelRecordsToDb(string filePath, IEnumerable<OperationRecord> records)
+        {
+            SQLiteConnection.CreateFile(filePath);
+
+            var connectionString = $"Data Source={filePath};Version=3;";
+            using var connection = new SQLiteConnection(connectionString);
+            connection.Open();
+
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                string createTableQuery = @"
+            CREATE TABLE PanelRecords (
+                Time TEXT,
+                PanelID INTEGER,
+                LOTID INTEGER,
+                CarrierID INTEGER
+            );";
+
+                using (var createCmd = new SQLiteCommand(createTableQuery, connection))
+                {
+                    createCmd.ExecuteNonQuery();
+                }
+
+                string insertQuery = @"
+            INSERT INTO PanelRecords (Time, PanelID, LOTID, CarrierID)
+            VALUES (@Time, @PanelID, @LOTID, @CarrierID)";
+
+                using (var insertCmd = new SQLiteCommand(insertQuery, connection))
+                {
+                    insertCmd.Parameters.Add(new SQLiteParameter("@Time"));
+                    insertCmd.Parameters.Add(new SQLiteParameter("@PanelID"));
+                    insertCmd.Parameters.Add(new SQLiteParameter("@LOTID"));
+                    insertCmd.Parameters.Add(new SQLiteParameter("@CarrierID"));
+
+                    foreach (var record in records)
+                    {
+                        insertCmd.Parameters["@Time"].Value = record.Time.ToString("yyyy-MM-dd HH:mm:ss");
+                        insertCmd.Parameters["@PanelID"].Value = record.PanelID;
+                        insertCmd.Parameters["@LOTID"].Value = record.LOTID;
+                        insertCmd.Parameters["@CarrierID"].Value = record.CarrierID;
+
+                        insertCmd.ExecuteNonQuery();
+                    }
+                }
+
+                transaction.Commit();
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
     }
 }
+
 

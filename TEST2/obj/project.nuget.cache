@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "6BfpUJkxYO8=",
+  "dgSpecHash": "8QY89301vhU=",
   "success": true,
   "projectFilePath": "C:\\Users\\bbo05\\source\\repos\\TEST2\\TEST2\\TEST2.csproj",
   "expectedPackageFiles": [
@@ -19,8 +19,10 @@
     "C:\\Users\\bbo05\\.nuget\\packages\\microsoft.extensions.primitives\\9.0.3\\microsoft.extensions.primitives.9.0.3.nupkg.sha512",
     "C:\\Users\\bbo05\\.nuget\\packages\\microsoft.io.recyclablememorystream\\3.0.1\\microsoft.io.recyclablememorystream.3.0.1.nupkg.sha512",
     "C:\\Users\\bbo05\\.nuget\\packages\\npgsql\\10.0.0\\npgsql.10.0.0.nupkg.sha512",
+    "C:\\Users\\bbo05\\.nuget\\packages\\stub.system.data.sqlite.core.netstandard\\1.0.119\\stub.system.data.sqlite.core.netstandard.1.0.119.nupkg.sha512",
     "C:\\Users\\bbo05\\.nuget\\packages\\system.componentmodel.annotations\\5.0.0\\system.componentmodel.annotations.5.0.0.nupkg.sha512",
     "C:\\Users\\bbo05\\.nuget\\packages\\system.configuration.configurationmanager\\10.0.0\\system.configuration.configurationmanager.10.0.0.nupkg.sha512",
+    "C:\\Users\\bbo05\\.nuget\\packages\\system.data.sqlite.core\\1.0.119\\system.data.sqlite.core.1.0.119.nupkg.sha512",
     "C:\\Users\\bbo05\\.nuget\\packages\\system.diagnostics.eventlog\\10.0.0\\system.diagnostics.eventlog.10.0.0.nupkg.sha512",
     "C:\\Users\\bbo05\\.nuget\\packages\\system.security.cryptography.pkcs\\9.0.3\\system.security.cryptography.pkcs.9.0.3.nupkg.sha512",
     "C:\\Users\\bbo05\\.nuget\\packages\\system.security.cryptography.protecteddata\\10.0.0\\system.security.cryptography.protecteddata.10.0.0.nupkg.sha512",

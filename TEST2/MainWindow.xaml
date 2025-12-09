@@ -6,9 +6,8 @@
         xmlns:local="clr-namespace:TEST2"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
-        Title="練習" Height="600" Width="1000" WindowStartupLocation="CenterScreen" Background="#F0F2F5">
+        Title="練習" Height="600" Width="1000" WindowStartupLocation="CenterScreen" Background="#F0F2F5" KeyDown="Window_PreviewKeyDown">
 
-    <!-- 建議加入資源樣式，解決你之前 XAML 中參照 {StaticResource ActionButtonStyle} 可能找不到的問題 -->
     <Window.Resources>
         <Style x:Key="ActionButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="50"/>
@@ -20,7 +19,6 @@
             <Setter Property="Cursor" Value="Hand"/>
         </Style>
 
-        <!-- 通用的上方功能按鈕樣式 -->
         <Style TargetType="Button">
             <Setter Property="Margin" Value="5,0,0,0"/>
             <Setter Property="Height" Value="30"/>
@@ -33,7 +31,6 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- 上方功能列 -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -41,23 +38,21 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Orientation="Horizontal">
-                <Button Content="新增" Click="BtnAdd_Click" Width="80"/>
-                <Button Content="查詢" Click="BtnQuery_Click" Width="80"/>
+                <Button x:Name="BtnAdd" Content="新增" Click="BtnAdd_Click" Width="80" ToolTip="快捷鍵：F1"/>
+                <Button x:Name="BtnQuery" Content="查詢" Click="BtnQuery_Click" Width="80" ToolTip="快捷鍵：F2"/>
 
-                <!-- 加上 x:Name -->
-                <Button x:Name="BtnImport" Content="匯入" Click="BtnImport_Click" Width="80"/>
-                <Button x:Name="BtnExport" Content="匯出" Click="BtnExport_Click" Width="80"/>
+                <Button x:Name="BtnImport" Content="匯入" Click="BtnImport_Click" Width="80" ToolTip="快捷鍵：F3"/>
+                <Button x:Name="BtnExport" Content="匯出" Click="BtnExport_Click" Width="80" ToolTip="快捷鍵：F4"/>
 
-                <Button Content="查看操作紀錄" Click="BtnLog_Click" Width="140"/>
-                <Button x:Name="BtnBatchDelete" Content="批量刪除" Click="BtnBatchDelete_Click" Width="100" Background="#F44336" Foreground="White" Margin="20,0,0,0"/>
-                <Button Content="顯示全部" Click="BtnShowAll_Click" Width="100" Background="#607D8B" Foreground="White" Margin="5,0,0,0"/>
+                <Button x:Name="BtnLog" Content="查看操作紀錄" Click="BtnLog_Click" Width="140" ToolTip="快捷鍵：F6"/>
+                <Button x:Name="BtnBatchDelete" Content="批量刪除" Click="BtnBatchDelete_Click" Width="100" Background="#F44336" Foreground="White" Margin="20,0,0,0" ToolTip="快捷鍵：Delete"/>
+                <Button x:Name="BtnShowAll" Content="顯示全部" Click="BtnShowAll_Click" Width="100" Background="#607D8B" Foreground="White" Margin="5,0,0,0" ToolTip="快捷鍵：F5"/>
             </StackPanel>
 
             <TextBlock x:Name="txtLastOpTime" Grid.Column="1" Text="最後操作時間: -" VerticalAlignment="Center" Foreground="#888888" FontSize="13"/>
         </Grid>
 
-        <!-- 資料表格 -->
-        <DataGrid x:Name="dataGrid" Grid.Row="1" AutoGenerateColumns="False" CanUserSortColumns="True" CanUserReorderColumns="False">
+        <DataGrid x:Name="dataGrid" Grid.Row="1" AutoGenerateColumns="False" CanUserSortColumns="True" CanUserReorderColumns="False" IsReadOnly="True" PreviewKeyDown="DataGrid_PreviewKeyDown">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Time" Binding="{Binding Time, StringFormat='yyyy/MM/dd HH:mm:ss'}" SortMemberPath="Time" Width="200"/>
                 <DataGridTextColumn Header="PanelID" Binding="{Binding PanelID}" SortMemberPath="PanelID" Width="*"/>
@@ -68,7 +63,6 @@
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <!-- 這裡使用了 StaticResource ActionButtonStyle，確保 Window.Resources 裡有定義 -->
                                 <Button Content="刪除" Click="BtnDelete_Click" Style="{StaticResource ActionButtonStyle}" Foreground="#FF5252"/>
                                 <Button Content="修改" Click="BtnModify_Click" Style="{StaticResource ActionButtonStyle}" Foreground="#333333"/>
                             </StackPanel>

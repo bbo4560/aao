@@ -57,7 +57,7 @@
                   CanUserReorderColumns="False" 
                   IsReadOnly="True"
                   VerticalScrollBarVisibility="Auto"
-                  RowHeight="80">
+                  RowHeight="100">
 
             <DataGrid.Columns>
                 <DataGridTextColumn Header="操作時間" 
@@ -84,7 +84,7 @@
 
                 <DataGridTextColumn Header="操作類型" 
                                     Binding="{Binding OperationType}" 
-                                    Width="90">
+                                    Width="150">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="VerticalAlignment" Value="Center"/>

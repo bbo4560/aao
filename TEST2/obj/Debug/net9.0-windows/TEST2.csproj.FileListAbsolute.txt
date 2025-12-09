@@ -51,3 +51,8 @@ C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\System.Diagnost
 C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\System.Security.Cryptography.ProtectedData.dll
 C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\runtimes\win\lib\net9.0\System.Diagnostics.EventLog.Messages.dll
 C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\runtimes\win\lib\net9.0\System.Diagnostics.EventLog.dll
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\System.Data.SQLite.dll
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\runtimes\linux-x64\native\SQLite.Interop.dll
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\runtimes\osx-x64\native\SQLite.Interop.dll
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\runtimes\win-x64\native\SQLite.Interop.dll
+C:\Users\bbo05\source\repos\TEST2\TEST2\bin\Debug\net9.0-windows\runtimes\win-x86\native\SQLite.Interop.dll

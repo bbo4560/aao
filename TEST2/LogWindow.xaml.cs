@@ -80,11 +80,13 @@ namespace TEST2
                     await _dbService.InsertLogAsync(new SystemLog
                     {
                         OperationTime = DateTime.Now,
+                        UserName = Environment.UserName,
                         MachineName = Environment.MachineName,
                         OperationType = "紀錄匯出",
                         AffectedData = $"操作紀錄\n檔案：{Path.GetFileName(filePath)}",
                         DetailDescription = $"{_logs.Count} 筆紀錄\n{Path.GetFullPath(filePath)}"
                     });
+
 
                     await LoadLogsAsync();
 
@@ -156,6 +158,7 @@ namespace TEST2
                 await _dbService.InsertLogAsync(new SystemLog
                 {
                     OperationTime = DateTime.Now,
+                    UserName = Environment.UserName,
                     MachineName = Environment.MachineName,
                     OperationType = "清除紀錄",
                     AffectedData = "All",
@@ -189,7 +192,7 @@ namespace TEST2
             var mainGrid = new Grid { Margin = new Thickness(25) };
             var contentStack = new StackPanel();
 
-            contentStack.Children.Add(new TextBlock
+            contentStack.Children.Add(new TextBlock 
             {
                 Text = "雙重驗證",
                 FontSize = 18,
